@@ -74,7 +74,7 @@
 	}
 	"Ext_EmptyBlastpushback"
 	{
-		"en"	"Combustible del explosivo de retroceso: Vacío!"
+		"es"	"Combustible del explosivo de retroceso: Vacío!"
 	}
 	"Ext_FuelExtinguisher"
 	{

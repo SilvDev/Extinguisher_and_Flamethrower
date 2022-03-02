@@ -1,6 +1,6 @@
 /*
 *	Extinguisher and Flamethrower
-*	Copyright (C) 2021 Silvers
+*	Copyright (C) 2022 Silvers
 *
 *	This program is free software: you can redistribute it and/or modify
 *	it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 
 
 
-#define PLUGIN_VERSION		"1.18"
+#define PLUGIN_VERSION		"1.19"
 
 /*======================================================================================
 	Plugin Info:
@@ -31,6 +31,10 @@
 
 ========================================================================================
 	Change Log:
+
+1.19 (01-Mar-2022)
+	- Changed where sounds are played so they're clearer and louder. Thanks to "swiftswing1" for reporting.
+	- Fixed Spanish translation. File "translations/es/extinguisher.phrases.txt" has been updated. Thanks to "swiftswing1" for reporting.
 
 1.18 (19-Oct-2021)
 	- Fixed the extinguisher equipping over the Chainsaw. Thanks to "swiftswing1" for reporting.
@@ -906,6 +910,8 @@ public Action TimerReviveSuccess(Handle timer, any client)
 			MoveExtinguisher(client, false);
 		}
 	}
+
+	return Plugin_Continue;
 }
 
 public void Event_ReviveStart(Event event, const char[] name, bool dontBroadcast)
@@ -1204,6 +1210,8 @@ public Action TimerStart(Handle timer)
 {
 	ResetPlugin();
 	LoadExtinguishers();
+
+	return Plugin_Continue;
 }
 
 void LoadExtinguishers()
@@ -1929,6 +1937,8 @@ public int AngMenuHandler(Menu menu, MenuAction action, int client, int index)
 			}
 		}
 	}
+
+	return 0;
 }
 
 // ====================================================================================================
@@ -1981,6 +1991,7 @@ public int PosMenuHandler(Menu menu, MenuAction action, int client, int index)
 		{
 			float vPos[3];
 			int entity;
+
 			for( int i = 0; i < MAX_ALLOWED; i++ )
 			{
 				entity = g_iSpawned[i][0];
@@ -2006,6 +2017,8 @@ public int PosMenuHandler(Menu menu, MenuAction action, int client, int index)
 			}
 		}
 	}
+
+	return 0;
 }
 
 // ====================================================================================================
@@ -2386,7 +2399,7 @@ void PushEntity(int client, float vAng[3], float vPos[3])
 
 public void OnTouching(const char[] output, int caller, int activator, float delay)
 {
-	int client = GetEntProp(caller, Prop_Data, "m_iHammerID", client);
+	int client = GetEntProp(caller, Prop_Data, "m_iHammerID");
 	if( activator == client )
 		return;
 
@@ -2845,15 +2858,15 @@ void CreateEffects(int client)
 	// ====================================================================================================
 	if( iType == TYPE_FLAMETHROWER )
 	{
-		EmitSoundToAll(g_bLeft4Dead2 ? SOUND_FIRE_L4D2 : SOUND_FIRE_L4D1, particle, SNDCHAN_AUTO, SNDLEVEL_NORMAL, SND_NOFLAGS, SNDVOL_NORMAL, SNDPITCH_NORMAL, -1, NULL_VECTOR, NULL_VECTOR, true, 0.0);
+		EmitSoundToAll(g_bLeft4Dead2 ? SOUND_FIRE_L4D2 : SOUND_FIRE_L4D1, client, SNDCHAN_AUTO, SNDLEVEL_NORMAL, SND_NOFLAGS, SNDVOL_NORMAL, SNDPITCH_NORMAL, -1, NULL_VECTOR, NULL_VECTOR, true, 0.0);
 	}
 	else if( iType == TYPE_BLASTPUSHBACK )
 	{
-		EmitSoundToAll(SOUND_BLAST, particle, SNDCHAN_AUTO, SNDLEVEL_TRAIN, SND_NOFLAGS, SNDVOL_NORMAL, SNDPITCH_NORMAL, -1, NULL_VECTOR, NULL_VECTOR, true, 0.0);
+		EmitSoundToAll(SOUND_BLAST, client, SNDCHAN_AUTO, SNDLEVEL_NORMAL, SND_NOFLAGS, SNDVOL_NORMAL, SNDPITCH_NORMAL, -1, NULL_VECTOR, NULL_VECTOR, true, 0.0);
 	}
 	else
 	{
-		EmitSoundToAll(SOUND_SPRAY, particle, SNDCHAN_AUTO, SNDLEVEL_NORMAL, SND_NOFLAGS, SNDVOL_NORMAL, SNDPITCH_NORMAL, -1, NULL_VECTOR, NULL_VECTOR, true, 0.0);
+		EmitSoundToAll(SOUND_SPRAY, client, SNDCHAN_AUTO, SNDLEVEL_NORMAL, SND_NOFLAGS, SNDVOL_NORMAL, SNDPITCH_NORMAL, -1, NULL_VECTOR, NULL_VECTOR, true, 0.0);
 	}
 
 
@@ -3494,6 +3507,8 @@ public Action TimerStopSound(Handle timer, any entity)
 {
 	if( IsValidEntRef(entity) )
 		StopSound(entity, SNDCHAN_AUTO, SOUND_SPRAY);
+
+	return Plugin_Continue;
 }
 
 
@@ -3815,6 +3830,9 @@ void KillAttachments(int client, bool all)
 		}
 	}
 
+	StopSound(client, SNDCHAN_AUTO, SOUND_SPRAY);
+	StopSound(client, SNDCHAN_AUTO, g_bLeft4Dead2 ? SOUND_FIRE_L4D2 : SOUND_FIRE_L4D1);
+
 	int entity = g_iPlayerData[client][INDEX_PROP];
 	if( all && IsValidEntRef(entity ) )
 	{
@@ -3831,10 +3849,6 @@ void KillAttachments(int client, bool all)
 		AcceptEntityInput(entity, "ClearParent");
 		RemoveEntity(entity);
 		g_iPlayerData[client][INDEX_PART] = 0;
-
-		StopSound(entity, SNDCHAN_AUTO, SOUND_BLAST);
-		StopSound(entity, SNDCHAN_AUTO, SOUND_SPRAY);
-		StopSound(entity, SNDCHAN_AUTO, g_bLeft4Dead2 ? SOUND_FIRE_L4D2 : SOUND_FIRE_L4D1);
 	}
 
 	entity = g_iPlayerData[client][INDEX_LIGHT];

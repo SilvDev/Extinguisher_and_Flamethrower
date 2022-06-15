@@ -18,7 +18,7 @@
 
 
 
-#define PLUGIN_VERSION		"1.19"
+#define PLUGIN_VERSION		"1.20"
 
 /*======================================================================================
 	Plugin Info:
@@ -31,6 +31,9 @@
 
 ========================================================================================
 	Change Log:
+
+1.20 (15-Jun-2022)
+	- Made refueling with gascans compatible with the "Scavenge Pouring - Unleaded Gas Only" plugin.
 
 1.19 (01-Mar-2022)
 	- Changed where sounds are played so they're clearer and louder. Thanks to "swiftswing1" for reporting.
@@ -538,12 +541,12 @@ public void OnConfigsExecuted()
 	IsAllowed();
 }
 
-public void ConVarChanged_Allow(Handle convar, const char[] oldValue, const char[] newValue)
+void ConVarChanged_Allow(Handle convar, const char[] oldValue, const char[] newValue)
 {
 	IsAllowed();
 }
 
-public void ConVarChanged_Cvars(Handle convar, const char[] oldValue, const char[] newValue)
+void ConVarChanged_Cvars(Handle convar, const char[] oldValue, const char[] newValue)
 {
 	GetCvars();
 }
@@ -686,7 +689,7 @@ bool IsAllowedGameMode()
 	return true;
 }
 
-public void OnGamemode(const char[] output, int caller, int activator, float delay)
+void OnGamemode(const char[] output, int caller, int activator, float delay)
 {
 	if( strcmp(output, "OnCoop") == 0 )
 		g_iCurrentMode = 1;
@@ -795,7 +798,7 @@ void UnhookEvents()
 	}
 }
 
-public void Event_Remove(Event event, const char[] name, bool dontBroadcast)
+void Event_Remove(Event event, const char[] name, bool dontBroadcast)
 {
 	int client = event.GetInt("userid");
 	if( client )
@@ -810,7 +813,7 @@ public void Event_Remove(Event event, const char[] name, bool dontBroadcast)
 	}
 }
 
-public void Event_Team(Event event, const char[] name, bool dontBroadcast)
+void Event_Team(Event event, const char[] name, bool dontBroadcast)
 {
 	int client = event.GetInt("userid");
 	if( client )
@@ -825,7 +828,7 @@ public void Event_Team(Event event, const char[] name, bool dontBroadcast)
 	}
 }
 
-public void Event_Swap_Bot(Event event, const char[] name, bool dontBroadcast)
+void Event_Swap_Bot(Event event, const char[] name, bool dontBroadcast)
 {
 	int client = GetClientOfUserId(event.GetInt("player"));
 	int bot = GetClientOfUserId(event.GetInt("bot"));
@@ -840,7 +843,7 @@ public void Event_Swap_Bot(Event event, const char[] name, bool dontBroadcast)
 	}
 }
 
-public void Event_Swap_User(Event event, const char[] name, bool dontBroadcast)
+void Event_Swap_User(Event event, const char[] name, bool dontBroadcast)
 {
 	int client = GetClientOfUserId(event.GetInt("player"));
 	int bot = GetClientOfUserId(event.GetInt("bot"));
@@ -855,7 +858,7 @@ public void Event_Swap_User(Event event, const char[] name, bool dontBroadcast)
 	}
 }
 
-public void Event_ReviveSuccess(Event event, const char[] name, bool dontBroadcast)
+void Event_ReviveSuccess(Event event, const char[] name, bool dontBroadcast)
 {
 	int client = event.GetInt("userid");
 	if( client )
@@ -892,7 +895,7 @@ public void Event_ReviveSuccess(Event event, const char[] name, bool dontBroadca
 	}
 }
 
-public Action TimerReviveSuccess(Handle timer, any client)
+Action TimerReviveSuccess(Handle timer, any client)
 {
 	client = GetClientOfUserId(client);
 	if( client && IsClientInGame(client) && GetClientTeam(client) == 2 && IsPlayerAlive(client) )
@@ -914,7 +917,7 @@ public Action TimerReviveSuccess(Handle timer, any client)
 	return Plugin_Continue;
 }
 
-public void Event_ReviveStart(Event event, const char[] name, bool dontBroadcast)
+void Event_ReviveStart(Event event, const char[] name, bool dontBroadcast)
 {
 	int client = event.GetInt("userid");
 	if( client )
@@ -951,7 +954,7 @@ public void Event_ReviveStart(Event event, const char[] name, bool dontBroadcast
 	}
 }
 
-public void Event_ReviveEnd(Event event, const char[] name, bool dontBroadcast)
+void Event_ReviveEnd(Event event, const char[] name, bool dontBroadcast)
 {
 	int client = event.GetInt("userid");
 	if( client )
@@ -995,7 +998,7 @@ public void Event_ReviveEnd(Event event, const char[] name, bool dontBroadcast)
 	}
 }
 
-public void Event_BlockIncap(Event event, const char[] name, bool dontBroadcast)
+void Event_BlockIncap(Event event, const char[] name, bool dontBroadcast)
 {
 	int client = GetClientOfUserId(event.GetInt("userid"));
 	if( client )
@@ -1034,7 +1037,7 @@ public void Event_BlockIncap(Event event, const char[] name, bool dontBroadcast)
 	}
 }
 
-public void Event_BlockLedge(Event event, const char[] name, bool dontBroadcast)
+void Event_BlockLedge(Event event, const char[] name, bool dontBroadcast)
 {
 	int client = GetClientOfUserId(event.GetInt("userid"));
 	if( client )
@@ -1049,7 +1052,7 @@ public void Event_BlockLedge(Event event, const char[] name, bool dontBroadcast)
 	}
 }
 
-public void Event_BlockStart(Event event, const char[] name, bool dontBroadcast)
+void Event_BlockStart(Event event, const char[] name, bool dontBroadcast)
 {
 	int client = GetClientOfUserId(event.GetInt("victim"));
 	if( client )
@@ -1059,7 +1062,7 @@ public void Event_BlockStart(Event event, const char[] name, bool dontBroadcast)
 	}
 }
 
-public void Event_BlockEnd(Event event, const char[] name, bool dontBroadcast)
+void Event_BlockEnd(Event event, const char[] name, bool dontBroadcast)
 {
 	int userid = event.GetInt("victim");
 	int client = GetClientOfUserId(userid);
@@ -1071,7 +1074,7 @@ public void Event_BlockEnd(Event event, const char[] name, bool dontBroadcast)
 	}
 }
 
-public void Event_GascanPoured(Event event, const char[] name, bool dontBroadcast)
+void Event_GascanPoured(Event event, const char[] name, bool dontBroadcast)
 {
 	int userid = event.GetInt("userid");
 	int client = GetClientOfUserId(userid);
@@ -1108,7 +1111,7 @@ public void Event_GascanPoured(Event event, const char[] name, bool dontBroadcas
 	}
 }
 
-public void Event_GascanPickup(Event event, const char[] name, bool dontBroadcast)
+void Event_GascanPickup(Event event, const char[] name, bool dontBroadcast)
 {
 	char sTemp[8];
 	event.GetString("item", sTemp, sizeof(sTemp));
@@ -1138,7 +1141,7 @@ public void Event_GascanPickup(Event event, const char[] name, bool dontBroadcas
 	}
 }
 
-public void Event_GascanDropped(Event event, const char[] name, bool dontBroadcast)
+void Event_GascanDropped(Event event, const char[] name, bool dontBroadcast)
 {
 	int userid = event.GetInt("userid");
 	int client = GetClientOfUserId(userid);
@@ -1169,12 +1172,12 @@ public void Event_GascanDropped(Event event, const char[] name, bool dontBroadca
 // ====================================================================================================
 //					START EVENTS - LOAD EXTINGUISHERS
 // ====================================================================================================
-public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
+void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
 	ResetPlugin();
 }
 
-public void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
+void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
 	g_bGlow = false;
 
@@ -1183,7 +1186,7 @@ public void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 	g_iRoundStart = 1;
 }
 
-public void Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast)
+void Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast)
 {
 	int client = event.GetInt("userid");
 	if( client )
@@ -1206,7 +1209,7 @@ public void Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast
 	g_iPlayerSpawn = 1;
 }
 
-public Action TimerStart(Handle timer)
+Action TimerStart(Handle timer)
 {
 	ResetPlugin();
 	LoadExtinguishers();
@@ -1342,7 +1345,7 @@ int CreateExtinguisher(float vPos[3], float vAng[3], int iType, int iEnum)
 // ====================================================================================================
 //					COMMANDS - sm_dropext, sm_giveext, sm_spawnext, sm_extwep
 // ====================================================================================================
-public Action CmdDrop(int client, int args)
+Action CmdDrop(int client, int args)
 {
 	if( g_bCvarAllow )
 	{
@@ -1382,7 +1385,7 @@ public Action CmdDrop(int client, int args)
 	return Plugin_Handled;
 }
 
-public Action CmdGive(int client, int args)
+Action CmdGive(int client, int args)
 {
 	if( g_bCvarAllow )
 	{
@@ -1445,7 +1448,7 @@ public Action CmdGive(int client, int args)
 	return Plugin_Handled;
 }
 
-public Action CmdSpawn(int client, int args)
+Action CmdSpawn(int client, int args)
 {
 	if( g_bCvarAllow )
 	{
@@ -1470,7 +1473,7 @@ public Action CmdSpawn(int client, int args)
 	return Plugin_Handled;
 }
 
-public Action CmdExtWep(int client, int args)
+Action CmdExtWep(int client, int args)
 {
 	if( g_bCvarAllow )
 	{
@@ -1537,7 +1540,7 @@ void GiveWeapon(int client)
 // ====================================================================================================
 //					sm_extsave
 // ====================================================================================================
-public Action CmdExtSave(int client, int args)
+Action CmdExtSave(int client, int args)
 {
 	if( !g_bCvarAllow )
 	{
@@ -1632,7 +1635,7 @@ public Action CmdExtSave(int client, int args)
 // ====================================================================================================
 //					sm_extdel
 // ====================================================================================================
-public Action CmdExtDelete(int client, int args)
+Action CmdExtDelete(int client, int args)
 {
 	if( !g_bCvarAllow )
 	{
@@ -1791,7 +1794,7 @@ public Action CmdExtDelete(int client, int args)
 // ====================================================================================================
 //					sm_extclear
 // ====================================================================================================
-public Action CmdExtClear(int client, int args)
+Action CmdExtClear(int client, int args)
 {
 	if( !g_bCvarAllow )
 	{
@@ -1807,7 +1810,7 @@ public Action CmdExtClear(int client, int args)
 // ====================================================================================================
 //					sm_extwipe
 // ====================================================================================================
-public Action CmdExtWipe(int client, int args)
+Action CmdExtWipe(int client, int args)
 {
 	if( !g_bCvarAllow )
 	{
@@ -1864,7 +1867,7 @@ public Action CmdExtWipe(int client, int args)
 // ====================================================================================================
 //					sm_extang
 // ====================================================================================================
-public Action CmdExtAng(int client, int args)
+Action CmdExtAng(int client, int args)
 {
 	if( !g_bCvarAllow )
 	{
@@ -1893,7 +1896,7 @@ void ShowAngMenu(int client)
 	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int AngMenuHandler(Menu menu, MenuAction action, int client, int index)
+int AngMenuHandler(Menu menu, MenuAction action, int client, int index)
 {
 	if( action == MenuAction_End )
 		delete menu;
@@ -1944,7 +1947,7 @@ public int AngMenuHandler(Menu menu, MenuAction action, int client, int index)
 // ====================================================================================================
 //					sm_extpos
 // ====================================================================================================
-public Action CmdExtPos(int client, int args)
+Action CmdExtPos(int client, int args)
 {
 	if( !g_bCvarAllow )
 	{
@@ -1973,7 +1976,7 @@ void ShowPosMenu(int client)
 	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int PosMenuHandler(Menu menu, MenuAction action, int client, int index)
+int PosMenuHandler(Menu menu, MenuAction action, int client, int index)
 {
 	if( action == MenuAction_End )
 		delete menu;
@@ -2024,7 +2027,7 @@ public int PosMenuHandler(Menu menu, MenuAction action, int client, int index)
 // ====================================================================================================
 //					sm_extset
 // ====================================================================================================
-public Action CmdExtSet(int client, int args)
+Action CmdExtSet(int client, int args)
 {
 	if( !g_bCvarAllow )
 	{
@@ -2112,7 +2115,7 @@ public Action CmdExtSet(int client, int args)
 // ====================================================================================================
 //					sm_extlist, sm_extglow
 // ====================================================================================================
-public Action CmdExtList(int client, int args)
+Action CmdExtList(int client, int args)
 {
 	float vPos[3];
 	int i, u, entity, count;
@@ -2173,7 +2176,7 @@ public Action CmdExtList(int client, int args)
 	return Plugin_Handled;
 }
 
-public Action CmdExtGlow(int client, int args)
+Action CmdExtGlow(int client, int args)
 {
 	int i, u, entity;
 	g_bGlow = !g_bGlow;
@@ -2210,7 +2213,7 @@ public Action CmdExtGlow(int client, int args)
 // ====================================================================================================
 //					TIMEOUT / TRACE / HURT / PUSH - PRETHINK
 // ====================================================================================================
-public Action TimerTrace(Handle timer)
+Action TimerTrace(Handle timer)
 {
 	bool destroy = true;
 	static bool bSwitch;
@@ -2397,7 +2400,7 @@ void PushEntity(int client, float vAng[3], float vPos[3])
 	AcceptEntityInput(entity, "FireUser1");
 }
 
-public void OnTouching(const char[] output, int caller, int activator, float delay)
+void OnTouching(const char[] output, int caller, int activator, float delay)
 {
 	int client = GetEntProp(caller, Prop_Data, "m_iHammerID");
 	if( activator == client )
@@ -2419,7 +2422,7 @@ public void OnTouching(const char[] output, int caller, int activator, float del
 // ====================================================================================================
 //					PRETHINK - EXTINGUISHER SHOOT, BLOCK SHOOTING
 // ====================================================================================================
-public void OnPreThink(int client)
+void OnPreThink(int client)
 {
 	static int s_iEquipped[MAXPLAYERS];
 
@@ -2449,6 +2452,8 @@ public void OnPreThink(int client)
 							int entity = CreateEntityByName("point_prop_use_target");
 							DispatchKeyValue(entity, "nozzle", "gas_nozzle");
 							DispatchSpawn(entity);
+
+							SetEntProp(entity, Prop_Data, "m_iHammerID", client); // Fix for "[L4D2] Scavenge Pouring - Unleaded Gas Only" plugin
 
 							float vPos[3];
 							GetEntPropVector(ref, Prop_Data, "m_vecOrigin", vPos);
@@ -2967,7 +2972,7 @@ public void OnEntityCreated(int entity, const char[] classname)
 	}
 }
 
-public void OnSpawnInferno(int entity)
+void OnSpawnInferno(int entity)
 {
 	if( !(g_iCvarType & ENUM_EXTINGUISHER) )
 		return;
@@ -3018,7 +3023,7 @@ public void OnSpawnInferno(int entity)
 	}
 }
 
-public void OnTouchInferno(const char[] output, int entity, int client, float delay)
+void OnTouchInferno(const char[] output, int entity, int client, float delay)
 {
 	if( client > 0 && client <= MaxClients )
 	{
@@ -3217,7 +3222,7 @@ bool CreateButton(int entity, int arraytype, int iType = 0)
 // ====================================================================================================
 //					BUTTON PRESS - GIVE
 // ====================================================================================================
-public void OnPressed(const char[] output, int caller, int activator, float delay)
+void OnPressed(const char[] output, int caller, int activator, float delay)
 {
 	if( !g_bCvarAllow )
 		return;
@@ -3315,7 +3320,7 @@ public void OnPressed(const char[] output, int caller, int activator, float dela
 // ====================================================================================================
 //					ON HEALTH CHANGED
 // ====================================================================================================
-public void OnHealthChanged(const char[] output, int caller, int activator, float delay)
+void OnHealthChanged(const char[] output, int caller, int activator, float delay)
 {
 	if( g_iCvarBreak == 3 && activator > 0 && activator <= MaxClients && GetClientTeam(activator) == 3 )
 		return;
@@ -3503,7 +3508,7 @@ public void OnHealthChanged(const char[] output, int caller, int activator, floa
 	}
 }
 
-public Action TimerStopSound(Handle timer, any entity)
+Action TimerStopSound(Handle timer, any entity)
 {
 	if( IsValidEntRef(entity) )
 		StopSound(entity, SNDCHAN_AUTO, SOUND_SPRAY);
@@ -3791,7 +3796,7 @@ bool ExtinguisherCount(int client)
 // ====================================================================================================
 //					SET TRANSMIT
 // ====================================================================================================
-public Action OnTransmit(int entity, int client)
+Action OnTransmit(int entity, int client)
 {
 	if( EntIndexToEntRef(entity) == g_iPlayerData[client][INDEX_PROP] )
 		return Plugin_Handled;
@@ -4113,7 +4118,7 @@ bool SetTeleportEndPoint(int client, float vPos[3], float vAng[3])
 	return true;
 }
 
-public bool FilterExcludeSelf(int entity, int contentsMask, any client)
+bool FilterExcludeSelf(int entity, int contentsMask, any client)
 {
 	if( entity == client )
 		return false;

@@ -18,7 +18,7 @@
 
 
 
-#define PLUGIN_VERSION		"1.20"
+#define PLUGIN_VERSION		"1.21"
 
 /*======================================================================================
 	Plugin Info:
@@ -31,6 +31,9 @@
 
 ========================================================================================
 	Change Log:
+
+1.21 (20-Jun-2022)
+	- Extinguisher is now blocked when "using" something, e.g. buttons.
 
 1.20 (15-Jun-2022)
 	- Made refueling with gascans compatible with the "Scavenge Pouring - Unleaded Gas Only" plugin.
@@ -2584,7 +2587,7 @@ void OnPreThink(int client)
 		// --------------------------------------------------
 		// ---------- ATTACK : SHOOT!
 		// --------------------------------------------------
-		else if( (buttons & IN_ATTACK || buttons & IN_ZOOM) && g_iPlayerData[client][INDEX_BLOCK] == 0 && GetGameTime() > g_fTimeout[client] )
+		else if( (buttons & IN_ATTACK || buttons & IN_ZOOM) && g_iPlayerData[client][INDEX_BLOCK] == 0 && GetGameTime() > g_fTimeout[client] && (g_bLeft4Dead2 ? GetEntPropEnt(client, Prop_Send, "m_useActionTarget") <= 0 : GetEntPropEnt(client, Prop_Send, "m_hUseEntity") <= 0) )
 		{
 			if( buttons & IN_ZOOM )
 			{

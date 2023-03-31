@@ -1,6 +1,6 @@
 /*
 *	Extinguisher and Flamethrower
-*	Copyright (C) 2022 Silvers
+*	Copyright (C) 2023 Silvers
 *
 *	This program is free software: you can redistribute it and/or modify
 *	it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 
 
 
-#define PLUGIN_VERSION		"1.21"
+#define PLUGIN_VERSION		"1.22"
 
 /*======================================================================================
 	Plugin Info:
@@ -31,6 +31,13 @@
 
 ========================================================================================
 	Change Log:
+
+1.22 (31-Mar-2023)
+	- Changed the method for detecting nearby fires to be accurate and not within a certain range. Fixes fires not extinguishing when they spread out.
+	- Changed cvar "l4d_extinguisher_incap" adding option "2" supporting the "Incapped Weapons" plugin.
+	- Fixed not being able to use the extinguisher when someone is healing you.
+	- Fixed the weapon showing after crawling while incapped and holding an Extinguisher.
+	- Thanks to "swiftswing1" for the bug reports and testing.
 
 1.21 (20-Jun-2022)
 	- Extinguisher is now blocked when "using" something, e.g. buttons.
@@ -212,23 +219,24 @@
 
 ConVar g_hCvarAllow, g_hCvarBreak, g_hCvarCheck, g_hCvarCombo, g_hCvarDamage, g_hCvarFlame, g_hCvarFreq, g_hCvarFriend, g_hCvarFuel, g_hCvarGlowB, g_hCvarGlowE, g_hCvarGlowF, g_hCvarGlowRan, g_hCvarGlowS, g_hCvarGrab, g_hCvarHint, g_hCvarIncap, g_hCvarMax, g_hCvarModes, g_hCvarModesOff, g_hCvarModesTog, g_hCvarPush, g_hCvarPushFuel, g_hCvarPushTime, g_hCvarRandom, g_hCvarRange, g_hCvarRemove, g_hCvarSpray, g_hCvarTime, g_hCvarTimeOut, g_hCvarTimed, g_hCvarType, g_hCvarView, g_hCvarVomit, g_hCvarWeapon;
 int g_iCvarBreak, g_iCvarCheck, g_iCvarCombo, g_iCvarDamage, g_iCvarFlame, g_iCvarFriend, g_iCvarFuel, g_iCvarGlowB, g_iCvarGlowE, g_iCvarGlowF, g_iCvarGlowRan, g_iCvarGlowS, g_iCvarGrab, g_iCvarHint, g_iCvarIncap, g_iCvarMax, g_iCvarPush, g_iCvarPushFuel, g_iCvarRandom, g_iCvarRemove, g_iCvarSpray, g_iCvarTime, g_iCvarType, g_iCvarView, g_iCvarVomit;
-bool g_bCvarAllow, g_bMapStarted;
+bool g_bCvarAllow, g_bMapStarted, g_bCvarCrawl;
 char g_sCvarWeapon[32];
 float g_fCvarFreq, g_fCvarPushTime, g_fCvarRange, g_fCvarTimed, g_fCvarTimeout;
 
-ConVar g_hCvarMPGameMode;
+ConVar g_hCvarMPGameMode, g_hCvarCrawl;
 Handle g_hSdkVomit, g_hTimerTrace;
 bool g_bGlow, g_bLeft4Dead2;
 int g_iLoadStatus, g_iOffsetGlow, g_iPlayerSpawn, g_iRoundStart, g_iSpawnCount;
 int g_iWallExt[MAX_ALLOWED][3];		// Wall extinguishers: [0] = prop_physics, [1] = func_button, [2] = Type.
 int g_iDropped[MAX_ALLOWED][4];		// Dropped extinguishers: [0] = prop_physics, [1] = func_button, [2] = Fuel, [3] = Type.
 int g_iSpawned[MAX_ALLOWED][4];		// Spawned extinguishers: [0] = prop_physics, [1] = func_button, [2] = Fuel, [3] = Type.
-int g_iInferno[MAX_ALLOWED][3];		// Del molotov/fireworks: [0] = trigger_multiple, [1] = inferno / fire_cracker_blast / insect_swarm, [2] = Count
+int g_iInferno[MAX_ALLOWED][2];		// Del molotov/fireworks: [0] = inferno / fire_cracker_blast / insect_swarm, [1] = Count
 int g_iPlayerData[MAXPLAYERS+1][6];	// [0] = prop_dynamic, [1] = info_particle, [2] = Light, [3] = Fuel, [4] = Type, [5] Blocked use.
 int g_iRefuel[MAXPLAYERS+1][3];		// [0] = Gascan Index, [1] = point_prop_use_target, [2] = g_iDropped extinguisher index.
 int g_iGunSlot[MAXPLAYERS+1];		// [0] = Primary Slot, [1] = Melee, [2] = Melee slot when incapped (returns to 0 after).
 int g_iHooked[MAXPLAYERS+1];		// SDKHooks PreThink 0=Off/1=On.
 int g_iZoomed[MAXPLAYERS+1];		// Bool to set when zoomed and frame requested to unzoom
+int g_iButtons[MAXPLAYERS+1];		// Last buttons held
 float g_fTimeout[MAXPLAYERS+1];		// Timeouts
 
 
@@ -239,7 +247,8 @@ enum
 	ENUM_SPAWNED	= (1 << 2),
 	ENUM_BLOCKED	= (1 << 3),
 	ENUM_INCAPPED	= (1 << 4),
-	ENUM_INREVIVE	= (1 << 5)
+	ENUM_LEDGEBLOCK	= (1 << 5),
+	ENUM_INREVIVE	= (1 << 6)
 }
 enum
 {
@@ -255,7 +264,6 @@ enum
 	TYPE_FREEZERSPRAY,
 	TYPE_BLASTPUSHBACK
 }
-
 enum
 {
 	INDEX_PROP,
@@ -264,6 +272,15 @@ enum
 	INDEX_FUEL,
 	INDEX_TYPE,
 	INDEX_BLOCK
+}
+enum
+{
+	SLOT_PRIMARY,
+	SLOT_SECONDARY,
+	SLOT_TEMP_PRI,
+	SLOT_TEMP_SEC,
+	SLOT_CURRENT_PRI,
+	SLOT_CURRENT_SEC
 }
 
 // "Weapon Charms" plugin compatibility
@@ -386,7 +403,7 @@ public void OnPluginStart()
 	}
 	g_hCvarGrab = CreateConVar(			"l4d_extinguisher_grab",		"32",			"0=Off, How many pre-existing extinguishers on maps can this plugin cater for.", CVAR_FLAGS);
 	g_hCvarHint = CreateConVar(			"l4d_extinguisher_hint",		"1",			"0=Off, 1=Display hints from translation file, 2=Not when Broken, 3=Not when Refueled, 4=Not when Broken or Refueled.", CVAR_FLAGS);
-	g_hCvarIncap = CreateConVar(		"l4d_extinguisher_incap",		"1",			"0=Off, 1=Allow the Extinguisher to be used when incapacitated.", CVAR_FLAGS);
+	g_hCvarIncap = CreateConVar(		"l4d_extinguisher_incap",		"1",			"0=Off, 1=Allow the Extinguisher to be used when incapacitated (temporarily switches Extinguisher to pistol slot). 2=Stay on the slot being used for Extinguishers (support for Incapped Weapons plugin).", CVAR_FLAGS);
 	g_hCvarMax = CreateConVar(			"l4d_extinguisher_max",			"0",			"Maximum number of players allowed to have the Extinguisher at once.", CVAR_FLAGS);
 	g_hCvarModes =	CreateConVar(		"l4d_extinguisher_modes",		"",				"Turn on the plugin in these game modes, separate by commas (no spaces). (Empty = all).", CVAR_FLAGS );
 	g_hCvarModesOff = CreateConVar(		"l4d_extinguisher_modes_off",	"",				"Turn off the plugin in these game modes, separate by commas (no spaces). (Empty = none).", CVAR_FLAGS );
@@ -407,6 +424,9 @@ public void OnPluginStart()
 	g_hCvarWeapon = CreateConVar(		"l4d_extinguisher_weapon",		"",				"\"\"=All (must set l4d_extinguisher_check to 0). Weapon entity name to replace and use for the Extinguisher.", CVAR_FLAGS);
 	CreateConVar(						"l4d_extinguisher_version",		PLUGIN_VERSION,	"Extinguisher plugin version.", FCVAR_NOTIFY|FCVAR_DONTRECORD);
 	AutoExecConfig(true,				"l4d_extinguisher");
+
+	g_hCvarCrawl = FindConVar("survivor_allow_crawling");
+	g_hCvarCrawl.AddChangeHook(ConVarChanged_Cvars);
 
 	g_hCvarMPGameMode = FindConVar("mp_gamemode");
 	g_hCvarMPGameMode.AddChangeHook(ConVarChanged_Allow);
@@ -462,6 +482,8 @@ public void OnPluginStart()
 	RegAdminCmd(	"sm_extwipe",	CmdExtWipe,		ADMFLAG_ROOT,	"Removes all extinguishers from the current map and deletes them from the config.");
 	RegAdminCmd(	"sm_extlist",	CmdExtList,		ADMFLAG_ROOT,	"Display a list extinguisher positions and the number of extinguishers.");
 
+	AddCommandListener(CommandListenerGive, "give");
+
 	if( g_bLeft4Dead2 )
 	{
 		RegAdminCmd("sm_extglow",	CmdExtGlow,		ADMFLAG_ROOT,	"Toggle to enable glow on all extinguishers to see where they are placed.");
@@ -487,6 +509,7 @@ void ResetPlugin()
 		g_fTimeout[i] = 0.0;
 		g_iHooked[i] = 0;
 		g_iZoomed[i] = 0;
+		g_iButtons[i] = 0;
 
 		int entity = g_iRefuel[i][1];
 		if( IsValidEntRef(entity) )
@@ -534,6 +557,43 @@ public void OnMapEnd()
 	ResetPlugin();
 }
 
+Action CommandListenerGive(int client, const char[] command, int args)
+{
+	if( args > 0 )
+	{
+		char buffer[8];
+		GetCmdArg(1, buffer, sizeof(buffer));
+
+		if( strcmp(buffer, "health", false) == 0 )
+		{
+			g_iPlayerData[client][INDEX_BLOCK] &= ~ENUM_LEDGEBLOCK;
+			g_iPlayerData[client][INDEX_BLOCK] &= ~ENUM_INREVIVE;
+			g_iPlayerData[client][INDEX_BLOCK] &= ~ENUM_INCAPPED;
+
+			if( g_iCvarIncap )
+			{
+				if( g_iCvarIncap != 2 )
+				{
+					if( g_iGunSlot[client] == SLOT_PRIMARY || g_iGunSlot[client] == SLOT_CURRENT_PRI )
+						g_iGunSlot[client] = SLOT_TEMP_PRI;
+					else if( g_iGunSlot[client] == SLOT_TEMP_SEC || g_iGunSlot[client] == SLOT_CURRENT_SEC )
+						g_iGunSlot[client] = SLOT_SECONDARY;
+				}
+
+				// MoveExtinguisher(client, true);
+			// }
+			// else
+			// {
+				// MoveExtinguisher(client, false);
+			}
+
+			// CreateTimer(0.1, TimerReviveSuccess, GetClientUserId(client));
+		}
+	}
+
+	return Plugin_Continue;
+}
+
 
 
 // ====================================================================================================
@@ -556,6 +616,7 @@ void ConVarChanged_Cvars(Handle convar, const char[] oldValue, const char[] newV
 
 void GetCvars()
 {
+	g_bCvarCrawl = g_hCvarCrawl.BoolValue;
 	g_iCvarBreak = g_hCvarBreak.IntValue;
 	g_iCvarCheck = g_hCvarCheck.IntValue;
 	g_iCvarCombo = GetColor(g_hCvarCombo);
@@ -574,7 +635,7 @@ void GetCvars()
 	}
 	g_iCvarGrab = g_hCvarGrab.IntValue;
 	g_iCvarHint = g_hCvarHint.IntValue;
-	g_iCvarIncap = g_hCvarIncap.BoolValue;
+	g_iCvarIncap = g_hCvarIncap.IntValue;
 	g_iCvarMax = g_hCvarMax.IntValue;
 	g_iCvarPush = g_hCvarPush.IntValue;
 	g_iCvarPushFuel = g_hCvarPushFuel.IntValue;
@@ -858,6 +919,11 @@ void Event_Swap_User(Event event, const char[] name, bool dontBroadcast)
 	{
 		KillAttachments(bot, true);
 		GiveExtinguisher(client);
+
+		if( GetEntProp(client, Prop_Send, "m_isIncapacitated", 1) )
+		{
+			SDKHook(client, SDKHook_WeaponSwitchPost, OnWeaponSwitch);
+		}
 	}
 }
 
@@ -869,7 +935,9 @@ void Event_ReviveSuccess(Event event, const char[] name, bool dontBroadcast)
 		client = GetClientOfUserId(client);
 		if( client )
 		{
+			g_iPlayerData[client][INDEX_BLOCK] &= ~ENUM_LEDGEBLOCK;
 			g_iPlayerData[client][INDEX_BLOCK] &= ~ENUM_INREVIVE;
+			g_iPlayerData[client][INDEX_BLOCK] &= ~ENUM_INCAPPED;
 
 			int iWeapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
 			if( iWeapon > 0 )
@@ -887,18 +955,19 @@ void Event_ReviveSuccess(Event event, const char[] name, bool dontBroadcast)
 	if( client )
 	{
 		g_iPlayerData[client][INDEX_BLOCK] = 0;
+		SDKUnhook(client, SDKHook_WeaponSwitchPost, OnWeaponSwitch);
 
-		if( g_iGunSlot[client] == 2 ) // Incapped extinguisher usage enabled, switch from melee slot to primary, as they had.
-			g_iGunSlot[client] = 0;
-		else if( g_iGunSlot[client] == 3 )
-			g_iGunSlot[client] = 1;
+		if( g_iGunSlot[client] == SLOT_TEMP_PRI || g_iGunSlot[client] == SLOT_CURRENT_PRI ) // Incapped extinguisher usage enabled, switch from melee slot to primary, as they had.
+			g_iGunSlot[client] = SLOT_PRIMARY;
+		else if( g_iGunSlot[client] == SLOT_TEMP_SEC || g_iGunSlot[client] == SLOT_CURRENT_SEC )
+			g_iGunSlot[client] = SLOT_SECONDARY;
 
 		MoveExtinguisher(client, false);
 		CreateTimer(0.1, TimerReviveSuccess, userid);
 	}
 }
 
-Action TimerReviveSuccess(Handle timer, any client)
+Action TimerReviveSuccess(Handle timer, int client)
 {
 	client = GetClientOfUserId(client);
 	if( client && IsClientInGame(client) && GetClientTeam(client) == 2 && IsPlayerAlive(client) )
@@ -944,10 +1013,13 @@ void Event_ReviveStart(Event event, const char[] name, bool dontBroadcast)
 
 			if( g_iCvarIncap )
 			{
-				if( g_iGunSlot[client] == 2 )
-					g_iGunSlot[client] = 0;
-				else if( g_iGunSlot[client] == 1 )
-					g_iGunSlot[client] = 3;
+				if( g_iCvarIncap != 2 )
+				{
+					if( g_iGunSlot[client] == SLOT_TEMP_PRI || g_iGunSlot[client] == SLOT_CURRENT_PRI )
+						g_iGunSlot[client] = SLOT_PRIMARY;
+					else if( g_iGunSlot[client] == SLOT_SECONDARY || g_iGunSlot[client] == SLOT_CURRENT_SEC )
+						g_iGunSlot[client] = SLOT_TEMP_SEC;
+				}
 
 				int iWeapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
 				if( iWeapon > 0 )
@@ -965,6 +1037,7 @@ void Event_ReviveEnd(Event event, const char[] name, bool dontBroadcast)
 		client = GetClientOfUserId(client);
 		if( client )
 		{
+			g_iPlayerData[client][INDEX_BLOCK] &= ~ENUM_LEDGEBLOCK;
 			g_iPlayerData[client][INDEX_BLOCK] &= ~ENUM_INREVIVE;
 
 			int iWeapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
@@ -984,30 +1057,39 @@ void Event_ReviveEnd(Event event, const char[] name, bool dontBroadcast)
 		client = GetClientOfUserId(client);
 		if( client )
 		{
+			g_iPlayerData[client][INDEX_BLOCK] &= ~ENUM_LEDGEBLOCK;
 			g_iPlayerData[client][INDEX_BLOCK] &= ~ENUM_INREVIVE;
 
 			if( g_iCvarIncap )
 			{
-				if( g_iGunSlot[client] == 0 )
-					g_iGunSlot[client] = 2;
-				else if( g_iGunSlot[client] == 3 )
-					g_iGunSlot[client] = 1;
+				if( g_iCvarIncap != 2 )
+				{
+					if( g_iGunSlot[client] == SLOT_PRIMARY || g_iGunSlot[client] == SLOT_CURRENT_PRI )
+						g_iGunSlot[client] = SLOT_TEMP_PRI;
+					else if( g_iGunSlot[client] == SLOT_TEMP_SEC || g_iGunSlot[client] == SLOT_CURRENT_SEC )
+						g_iGunSlot[client] = SLOT_SECONDARY;
+				}
 
 				MoveExtinguisher(client, true);
 			}
 			else
+			{
 				MoveExtinguisher(client, false);
+			}
 		}
 	}
 }
 
 void Event_BlockIncap(Event event, const char[] name, bool dontBroadcast)
 {
-	int client = GetClientOfUserId(event.GetInt("userid"));
+	int userid = event.GetInt("userid");
+	int client = GetClientOfUserId(userid);
 	if( client )
 	{
 		if( !g_iCvarIncap )
 		{
+			g_iPlayerData[client][INDEX_BLOCK] |= ENUM_INCAPPED;
+
 			MoveExtinguisher(client, false);
 			int iWeapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
 			int iValidWeapon = HasWeapon(client, iWeapon);
@@ -1016,10 +1098,14 @@ void Event_BlockIncap(Event event, const char[] name, bool dontBroadcast)
 		}
 		else
 		{
-			MoveExtinguisher(client, true);
+			SDKHook(client, SDKHook_WeaponSwitchPost, OnWeaponSwitch);
+			RequestFrame(OnFrameIncap, userid);
 
-			if( g_iGunSlot[client] == 0 ) // 0 = Primary slot, temporarily move to pistol slot.
-				g_iGunSlot[client] = 2;
+			if( g_iCvarIncap != 2 )
+			{
+				if( g_iGunSlot[client] == SLOT_PRIMARY || g_iGunSlot[client] == SLOT_CURRENT_PRI ) // 0 = Primary slot, temporarily move to pistol slot.
+					g_iGunSlot[client] = SLOT_TEMP_PRI;
+			}
 
 			if( g_iCvarHint && IsValidEntRef(g_iPlayerData[client][INDEX_PROP]) )
 			{
@@ -1040,17 +1126,30 @@ void Event_BlockIncap(Event event, const char[] name, bool dontBroadcast)
 	}
 }
 
+void OnFrameIncap(int client)
+{
+	client = GetClientOfUserId(client);
+	if( client && IsClientInGame(client) )
+	{
+		OnWeaponSwitch(client, 0);
+		OnWeaponIncap(client);
+	}
+}
+
 void Event_BlockLedge(Event event, const char[] name, bool dontBroadcast)
 {
 	int client = GetClientOfUserId(event.GetInt("userid"));
 	if( client )
 	{
-		if( g_iGunSlot[client] == 2 ) // Was in temporarily pistol slot, move to primary slot.
-			g_iGunSlot[client] = 0;
-		else if( g_iGunSlot[client] == 3 )
-			g_iGunSlot[client] = 1;
+		if( g_iCvarIncap != 2 )
+		{
+			if( g_iGunSlot[client] == SLOT_TEMP_PRI || g_iGunSlot[client] == SLOT_CURRENT_PRI ) // Was in temporarily pistol slot, move to primary slot.
+				g_iGunSlot[client] = SLOT_PRIMARY;
+			else if( g_iGunSlot[client] == SLOT_TEMP_SEC || g_iGunSlot[client] == SLOT_CURRENT_SEC )
+				g_iGunSlot[client] = SLOT_SECONDARY;
+		}
 
-		g_iPlayerData[client][INDEX_BLOCK] |= ENUM_INCAPPED;
+		g_iPlayerData[client][INDEX_BLOCK] |= ENUM_LEDGEBLOCK;
 		MoveExtinguisher(client, false);
 	}
 }
@@ -1199,11 +1298,23 @@ void Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast)
 		{
 			g_iZoomed[client] = 0;
 			g_iPlayerData[client][INDEX_BLOCK] = 0;
+			SDKUnhook(client, SDKHook_WeaponSwitchPost, OnWeaponSwitch);
 
-			if( g_iGunSlot[client] == 2 ) // Incapped extinguisher usage enabled, switch from melee slot to primary, as they had.
-				g_iGunSlot[client] = 0;
-			else if( g_iGunSlot[client] == 3 )
-				g_iGunSlot[client] = 1;
+			if( g_iCvarIncap != 2 )
+			{
+				if( g_iGunSlot[client] == SLOT_TEMP_PRI || g_iGunSlot[client] == SLOT_CURRENT_PRI ) // Incapped extinguisher usage enabled, switch from melee slot to primary, as they had.
+					g_iGunSlot[client] = SLOT_PRIMARY;
+				else if( g_iGunSlot[client] == SLOT_TEMP_SEC || g_iGunSlot[client] == SLOT_CURRENT_SEC )
+					g_iGunSlot[client] = SLOT_SECONDARY;
+			}
+			else
+			{
+				int weapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
+				if( GetPlayerWeaponSlot(client, 0) == weapon )
+					g_iGunSlot[client] = SLOT_CURRENT_PRI;
+				else
+					g_iGunSlot[client] = SLOT_CURRENT_SEC;
+			}
 		}
 	}
 
@@ -2176,6 +2287,7 @@ Action CmdExtList(int client, int args)
 		ReplyToCommand(client, "[Extinguisher] Total: %d.", count);
 	else
 		CPrintToChat(client, "%tTotal: %d/%d.", "Ext_ChatTagExtinguisher", count, MAX_ALLOWED);
+	
 	return Plugin_Handled;
 }
 
@@ -2495,6 +2607,14 @@ void OnPreThink(int client)
 	// --------------------------------------------------
 	if( IsValidEntRef(g_iPlayerData[client][INDEX_PROP]) )
 	{
+		// --------------------------------------------------
+		// Incap not allowed
+		// --------------------------------------------------
+		if( !g_iCvarIncap && GetEntProp(client, Prop_Send, "m_isIncapacitated", 1) == 1 )
+		{
+			return;
+		}
+
 		int iValidWeapon;
 		int iWeapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
 		int mounted = GetEntProp(client, Prop_Send, "m_usingMountedWeapon");
@@ -2541,8 +2661,8 @@ void OnPreThink(int client)
 			// --------------------------------------------------
 			// If they are holding a melee weapon, move the extinguisher to the primary slot
 			// --------------------------------------------------
-			if( iValidWeapon == 1 && g_iGunSlot[client] == 1 )
-				g_iGunSlot[client] = 0;
+			if( iValidWeapon == 1 && (g_iGunSlot[client] == SLOT_SECONDARY || g_iGunSlot[client] == SLOT_CURRENT_SEC) )
+				g_iGunSlot[client] = SLOT_PRIMARY;
 			return;
 		}
 
@@ -2576,6 +2696,20 @@ void OnPreThink(int client)
 
 
 		// --------------------------------------------------
+		// ---------- INCAPPED CRAWLING
+		// --------------------------------------------------
+		if( g_bCvarCrawl )
+		{
+			if( !(buttons & IN_FORWARD) && g_iButtons[client] & IN_FORWARD )
+			{
+				OnWeaponSwitch(client, 0);
+			}
+
+			g_iButtons[client] = buttons;
+		}
+
+
+		// --------------------------------------------------
 		// ---------- RELOAD : DROP WEAPON
 		// --------------------------------------------------
 		if( buttons & IN_RELOAD )
@@ -2587,7 +2721,7 @@ void OnPreThink(int client)
 		// --------------------------------------------------
 		// ---------- ATTACK : SHOOT!
 		// --------------------------------------------------
-		else if( (buttons & IN_ATTACK || buttons & IN_ZOOM) && g_iPlayerData[client][INDEX_BLOCK] == 0 && GetGameTime() > g_fTimeout[client] && (g_bLeft4Dead2 ? GetEntPropEnt(client, Prop_Send, "m_useActionTarget") <= 0 : GetEntPropEnt(client, Prop_Send, "m_hUseEntity") <= 0) )
+		else if( (buttons & IN_ATTACK || buttons & IN_ZOOM) && g_iPlayerData[client][INDEX_BLOCK] == 0 && GetGameTime() > g_fTimeout[client] && (g_bLeft4Dead2 ? GetEntPropEnt(client, Prop_Send, "m_useActionOwner") != client : GetEntPropEnt(client, Prop_Send, "m_hUseEntity") <= 0) )
 		{
 			if( buttons & IN_ZOOM )
 			{
@@ -2695,6 +2829,56 @@ void OnPreThink(int client)
 					}
 
 					CreateEffects(client);
+				}
+				else
+				{
+					// Player is using freezer type, check for inferno to remove
+					if( type == TYPE_EXTINGUISHER || (g_iCvarCombo && type == TYPE_FREEZERSPRAY) )
+					{
+						bool stop;
+						int count, entity, x, y, z;
+						float vPos[3], vEnd[3], vVec[3];
+
+						for( int index = 0; index < MAX_ALLOWED; index++ )
+						{
+							entity = g_iInferno[index][0];
+							if( IsValidEntRef(entity) )
+							{
+								GetClientAbsOrigin(client, vPos);
+								GetEntPropVector(entity, Prop_Data, "m_vecOrigin", vEnd);
+
+								if( GetVectorDistance(vPos, vEnd) <= 300.0 )
+								{
+									count = GetEntProp(entity, Prop_Send, "m_fireCount") - 1;
+
+									for( int i = count; i > 0; )
+									{
+										i--;
+										x = GetEntProp(entity, Prop_Send, "m_fireXDelta", 4, i);
+										y = GetEntProp(entity, Prop_Send, "m_fireYDelta", 4, i);
+										z = GetEntProp(entity, Prop_Send, "m_fireZDelta", 4, i);
+
+										vVec = vEnd;
+										vVec[0] += x;
+										vVec[1] += y;
+										vVec[2] += z;
+
+										if( GetVectorDistance(vPos, vVec) <= 50.0 )
+										{
+											if( g_iInferno[index][1]++ >= g_iCvarTime )
+											{
+												stop = true;
+												RemoveEntity(entity);
+												break;
+											}
+										}
+									}
+								}
+							}
+
+							if( stop ) break;
+						}
+					}
 				}
 
 
@@ -2957,6 +3141,102 @@ void CreateEffects(int client)
 	}
 }
 
+void OnWeaponSwitch(int client, int weapon)
+{
+	weapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
+
+	if( weapon != -1 )
+	{
+		if( IsValidEntRef(g_iPlayerData[client][INDEX_PROP]) )
+		{
+			if( GetPlayerWeaponSlot(client, 0) == weapon )
+			{
+				switch( g_iGunSlot[client] )
+				{
+					case SLOT_PRIMARY, SLOT_TEMP_SEC, SLOT_CURRENT_PRI:
+					{
+						SetEntProp(client, Prop_Send, "m_bDrawViewmodel", 0);
+					}
+					default:
+					{
+						SetEntProp(client, Prop_Send, "m_bDrawViewmodel", 1);
+					}
+				}
+			}
+			else if( GetPlayerWeaponSlot(client, 1) == weapon )
+			{
+				switch( g_iGunSlot[client] )
+				{
+					case SLOT_SECONDARY, SLOT_TEMP_PRI, SLOT_CURRENT_SEC:
+					{
+						SetEntProp(client, Prop_Send, "m_bDrawViewmodel", 0);
+					}
+					default:
+					{
+						SetEntProp(client, Prop_Send, "m_bDrawViewmodel", 1);
+					}
+				}
+			}
+			else
+			{
+				SetEntProp(client, Prop_Send, "m_bDrawViewmodel", 1);
+			}
+		}
+		else
+		{
+			SetEntProp(client, Prop_Send, "m_bDrawViewmodel", 1);
+		}
+	}
+}
+
+void OnWeaponIncap(int client)
+{
+	int weapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
+
+	if( weapon != -1 )
+	{
+		if( IsValidEntRef(g_iPlayerData[client][INDEX_PROP]) )
+		{
+			if( GetPlayerWeaponSlot(client, 0) == weapon )
+			{
+				switch( g_iGunSlot[client] )
+				{
+					case SLOT_PRIMARY, SLOT_TEMP_SEC, SLOT_CURRENT_PRI:
+					{
+						MoveExtinguisher(client, true);
+					}
+					default:
+					{
+						MoveExtinguisher(client, false);
+					}
+				}
+			}
+			else if( GetPlayerWeaponSlot(client, 1) == weapon )
+			{
+				switch( g_iGunSlot[client] )
+				{
+					case SLOT_SECONDARY, SLOT_TEMP_PRI, SLOT_CURRENT_SEC:
+					{
+						MoveExtinguisher(client, true);
+					}
+					default:
+					{
+						MoveExtinguisher(client, false);
+					}
+				}
+			}
+			else
+			{
+				MoveExtinguisher(client, false);
+			}
+		}
+		else
+		{
+			MoveExtinguisher(client, false);
+		}
+	}
+}
+
 
 
 // ====================================================================================================
@@ -2992,66 +3272,8 @@ void OnSpawnInferno(int entity)
 
 	if( index != -1 )
 	{
-		int trigger = CreateEntityByName("trigger_multiple");
-		DispatchKeyValue(trigger, "StartDisabled", "1");
-		DispatchKeyValue(trigger, "spawnflags", "1");
-		DispatchKeyValue(trigger, "entireteam", "0");
-		DispatchKeyValue(trigger, "allowincap", "0");
-		DispatchKeyValue(trigger, "allowghost", "0");
-
-		DispatchSpawn(trigger);
-		SetEntityModel(trigger, MODEL_BOUNDING);
-
-		float vMins[3]; vMins = view_as<float>({-250.0, -250.0, 0.0});
-		float vMaxs[3]; vMaxs = view_as<float>({250.0, 250.0, 50.0});
-		SetEntPropVector(trigger, Prop_Send, "m_vecMins", vMins);
-		SetEntPropVector(trigger, Prop_Send, "m_vecMaxs", vMaxs);
-		SetEntProp(trigger, Prop_Send, "m_nSolidType", 2);
-
-		float vPos[3];
-		GetEntPropVector(entity, Prop_Data, "m_vecOrigin", vPos);
-		TeleportEntity(trigger, vPos, NULL_VECTOR, NULL_VECTOR);
-
-		SetVariantString("!activator");
-		AcceptEntityInput(trigger, "SetParent", entity);
-		SetVariantString("OnUser1 !self:Enable::0.1:-1");
-		AcceptEntityInput(trigger, "AddOutput");
-		AcceptEntityInput(trigger, "FireUser1");
-
-		g_iInferno[index][0] = EntIndexToEntRef(trigger);
-		g_iInferno[index][1] = EntIndexToEntRef(entity);
-		g_iInferno[index][2] = 0;
-
-		HookSingleEntityOutput(trigger, "OnTrigger", OnTouchInferno);
-	}
-}
-
-void OnTouchInferno(const char[] output, int entity, int client, float delay)
-{
-	if( client > 0 && client <= MaxClients )
-	{
-		int type = g_iPlayerData[client][INDEX_TYPE];
-
-		// Player is shooting particles, has an extinguisher or combo/extinguisher
-		if( (type == TYPE_EXTINGUISHER || (g_iCvarCombo && type == TYPE_FREEZERSPRAY)) && IsValidEntRef(g_iPlayerData[client][INDEX_PART]) )
-		{
-			entity = EntIndexToEntRef(entity);
-
-			for( int i = 0; i < MAX_ALLOWED; i++ )
-			{
-				if( g_iInferno[i][0] == entity && g_iInferno[i][2]++ >= g_iCvarTime )
-				{
-					if( IsValidEntRef(g_iInferno[i][1]) )
-						RemoveEntity(g_iInferno[i][1]);
-					RemoveEntity(entity);
-
-					g_iInferno[i][0] = 0;
-					g_iInferno[i][1] = 0;
-					g_iInferno[i][2] = 0;
-					return;
-				}
-			}
-		}
+		g_iInferno[index][0] = EntIndexToEntRef(entity);
+		g_iInferno[index][1] = 0;
 	}
 }
 
@@ -3511,7 +3733,7 @@ void OnHealthChanged(const char[] output, int caller, int activator, float delay
 	}
 }
 
-Action TimerStopSound(Handle timer, any entity)
+Action TimerStopSound(Handle timer, int entity)
 {
 	if( IsValidEntRef(entity) )
 		StopSound(entity, SNDCHAN_AUTO, SOUND_SPRAY);
@@ -3685,11 +3907,13 @@ void GiveExtinguisher(int client)
 		return;
 
 	int iWeapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
+
 	int slot = GetPlayerWeaponSlot(client, 1);
 	if( iWeapon == slot )
-		g_iGunSlot[client] = 1;
+		g_iGunSlot[client] = g_iCvarIncap == 2 ? SLOT_CURRENT_SEC : SLOT_SECONDARY;
 	else
-		g_iGunSlot[client] = 0;
+		g_iGunSlot[client] = g_iCvarIncap == 2 ? SLOT_CURRENT_PRI : SLOT_PRIMARY;
+
 	int iValidWeapon = HasWeapon(client, iWeapon);
 
 	if( g_iCvarCheck && iValidWeapon == 0 )
@@ -3918,13 +4142,6 @@ void KillEnts()
 			RemoveEntity(entity);
 			g_iSpawned[i][1] = 0;
 		}
-
-		entity = g_iInferno[i][0];
-		if( IsValidEntRef(entity) )
-		{
-			RemoveEntity(entity);
-			g_iInferno[i][0] = 0;
-		}
 	}
 }
 
@@ -3936,12 +4153,12 @@ void KillEnts()
 // Returns if the player has a valid weapon or not. Valid entity ID on success, 0 on failure, 1 on melee weapons.
 int HasWeapon(int client, int weapon, bool test = false)
 {
-	if( weapon == -1 || g_iGunSlot[client] == 3 )
+	if( weapon == -1 || g_iGunSlot[client] == SLOT_TEMP_SEC )
 		return 0;
 
 	if( g_iCvarCheck == 0 && g_sCvarWeapon[0] == 0 )
 	{
-		if( g_iGunSlot[client] != 0 )
+		if( g_iGunSlot[client] != SLOT_PRIMARY && g_iGunSlot[client] != SLOT_CURRENT_PRI )
 		{
 			if( GetPlayerWeaponSlot(client, 1) == weapon )
 			{
@@ -4121,7 +4338,7 @@ bool SetTeleportEndPoint(int client, float vPos[3], float vAng[3])
 	return true;
 }
 
-bool FilterExcludeSelf(int entity, int contentsMask, any client)
+bool FilterExcludeSelf(int entity, int contentsMask, int client)
 {
 	if( entity == client )
 		return false;

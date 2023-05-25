@@ -18,7 +18,7 @@
 
 
 
-#define PLUGIN_VERSION		"1.22"
+#define PLUGIN_VERSION		"1.23"
 
 /*======================================================================================
 	Plugin Info:
@@ -31,6 +31,9 @@
 
 ========================================================================================
 	Change Log:
+
+1.23 (25-May-2023)
+	- Made the last change compatible with L4D1. Thanks to "Ja-Forces" for reporting.
 
 1.22 (31-Mar-2023)
 	- Changed the method for detecting nearby fires to be accurate and not within a certain range. Fixes fires not extinguishing when they spread out.
@@ -2847,30 +2850,45 @@ void OnPreThink(int client)
 								GetClientAbsOrigin(client, vPos);
 								GetEntPropVector(entity, Prop_Data, "m_vecOrigin", vEnd);
 
-								if( GetVectorDistance(vPos, vEnd) <= 300.0 )
+								if( g_bLeft4Dead2 )
 								{
-									count = GetEntProp(entity, Prop_Send, "m_fireCount") - 1;
-
-									for( int i = count; i > 0; )
+									if( GetVectorDistance(vPos, vEnd) <= 300.0 )
 									{
-										i--;
-										x = GetEntProp(entity, Prop_Send, "m_fireXDelta", 4, i);
-										y = GetEntProp(entity, Prop_Send, "m_fireYDelta", 4, i);
-										z = GetEntProp(entity, Prop_Send, "m_fireZDelta", 4, i);
+										count = GetEntProp(entity, Prop_Send, "m_fireCount") - 1;
 
-										vVec = vEnd;
-										vVec[0] += x;
-										vVec[1] += y;
-										vVec[2] += z;
-
-										if( GetVectorDistance(vPos, vVec) <= 50.0 )
+										for( int i = count; i > 0; )
 										{
-											if( g_iInferno[index][1]++ >= g_iCvarTime )
+											i--;
+											x = GetEntProp(entity, Prop_Send, "m_fireXDelta", 4, i);
+											y = GetEntProp(entity, Prop_Send, "m_fireYDelta", 4, i);
+											z = GetEntProp(entity, Prop_Send, "m_fireZDelta", 4, i);
+
+											vVec = vEnd;
+											vVec[0] += x;
+											vVec[1] += y;
+											vVec[2] += z;
+
+											if( GetVectorDistance(vPos, vVec) <= 50.0 )
 											{
-												stop = true;
-												RemoveEntity(entity);
-												break;
+												if( g_iInferno[index][1]++ >= g_iCvarTime )
+												{
+													stop = true;
+													RemoveEntity(entity);
+													break;
+												}
 											}
+										}
+									}
+								}
+								else
+								{
+									if( GetVectorDistance(vPos, vEnd) <= 250.0 )
+									{
+										if( g_iInferno[index][1]++ >= g_iCvarTime )
+										{
+											stop = true;
+											RemoveEntity(entity);
+											break;
 										}
 									}
 								}
